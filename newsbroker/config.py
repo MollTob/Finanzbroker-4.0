@@ -39,6 +39,7 @@ class Config:
     db_path: Path
     feeds: list[Feed]
     keywords: list[str]
+    primary_keywords: list[str]
     user_agent: str
     llm_api_key: str = ""
     llm_model: str = "claude-haiku-5-5"
@@ -48,6 +49,7 @@ class Config:
     push_min_confidence: float = 0.7
     digest_min_magnitude: int = 2
     max_scoring_per_run: int = 25
+    max_age_days: int = 3
     extra: dict = field(default_factory=dict)
 
 
@@ -60,6 +62,7 @@ def load_config(root: Path = ROOT) -> Config:
         db_path=Path(os.environ.get("NEWSBROKER_DB", root / "data" / "newsbroker.db")),
         feeds=[Feed(**f) for f in data.get("feeds", [])],
         keywords=[k.lower() for k in data.get("keywords", [])],
+        primary_keywords=[k.lower() for k in data.get("primary_keywords", [])],
         user_agent=os.environ.get("NEWSBROKER_USER_AGENT", "Finanzbroker/4.0 (privat)"),
         llm_api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
         llm_model=os.environ.get("NEWSBROKER_LLM_MODEL", settings.get("llm_model", "claude-haiku-5-5")),
@@ -69,4 +72,5 @@ def load_config(root: Path = ROOT) -> Config:
         push_min_confidence=settings.get("push_min_confidence", 0.7),
         digest_min_magnitude=settings.get("digest_min_magnitude", 2),
         max_scoring_per_run=settings.get("max_scoring_per_run", 25),
+        max_age_days=settings.get("max_age_days", 3),
     )

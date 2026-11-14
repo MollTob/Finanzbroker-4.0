@@ -6,7 +6,7 @@ import sqlite3
 
 from . import db, scoring, telegram
 from .config import Config
-from .prefilter import is_relevant
+from .prefilter import is_fresh, is_relevant
 from .sources.rss import fetch_feed
 
 log = logging.getLogger(__name__)
@@ -23,13 +23,16 @@ def ingest(conn: sqlite3.Connection, cfg: Config, fetch=fetch_feed) -> int:
 
 
 def prefilter(conn: sqlite3.Connection, cfg: Config) -> int:
+    """Bewertet neue Artikel und den noch nicht gescorten Rückstau (damit Filteränderungen sofort greifen)."""
     passed = 0
-    for art in db.articles_by_status(conn, "new"):
-        ok = is_relevant(art["title"], art["summary"], art["source_kind"], cfg.keywords)
+    pending = db.articles_by_status(conn, "new", 100000) + db.articles_by_status(conn, "filtered", 100000)
+    for art in pending:
+        ok = is_fresh(art["published_at"], cfg.max_age_days) and is_relevant(
+            art["title"], art["summary"], art["source_kind"], cfg.keywords, cfg.primary_keywords)
         db.set_status(conn, art["id"], "filtered" if ok else "skipped")
         passed += ok
     conn.commit()
-    log.info("Vorfilter: %d relevant", passed)
+    log.info("Vorfilter: %d Artikel warten auf Scoring", passed)
     return passed
 
 

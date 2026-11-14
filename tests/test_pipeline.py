@@ -4,7 +4,9 @@ import pytest
 
 from newsbroker import db, pipeline, scoring, telegram
 from newsbroker.config import Config, Feed
-from newsbroker.prefilter import is_relevant
+from datetime import datetime, timezone
+
+from newsbroker.prefilter import is_fresh, is_relevant
 from newsbroker.sources.rss import parse_feed
 
 RSS = """<?xml version="1.0"?><rss version="2.0"><channel><title>t</title>
@@ -29,7 +31,7 @@ def conn():
 
 @pytest.fixture
 def cfg():
-    return Config(db_path=Path(":memory:"), feeds=[FEED], keywords=["ceo", "steps down"],
+    return Config(db_path=Path(":memory:"), feeds=[FEED], keywords=["ceo", "steps down"], primary_keywords=["fomc"], max_age_days=100000,
                   user_agent="test", llm_api_key="k", telegram_token="t", telegram_chat_id="c")
 
 
@@ -49,9 +51,25 @@ def test_dedup_by_url_and_title(conn):
 
 
 def test_prefilter():
-    assert is_relevant("Nvidia CEO steps down", "", "media", ["ceo"])
-    assert not is_relevant("Local bakery wins award", "", "media", ["ceo"])
-    assert is_relevant("Press release", "", "primary", ["ceo"])
+    assert is_relevant("Nvidia CEO steps down", "", "media", ["ceo"], ["fomc"])
+    assert not is_relevant("Local bakery wins award", "", "media", ["ceo"], ["fomc"])
+    assert is_relevant("Federal Reserve issues FOMC statement", "", "primary", ["ceo"], ["fomc"])
+    assert not is_relevant("Board announces approval of application by X Bancorp", "", "primary", ["ceo"], ["fomc"])
+
+
+def test_is_fresh():
+    now = datetime(2026, 11, 14, 12, tzinfo=timezone.utc)
+    assert is_fresh("2026-11-13T10:00:00+00:00", 3, now)
+    assert not is_fresh("2026-11-01T10:00:00+00:00", 3, now)
+    assert is_fresh(None, 3, now)
+
+
+def test_refilter_clears_stale_backlog(conn, cfg):
+    pipeline.ingest(conn, cfg, fetch=lambda feed, ua: parse_feed(RSS, feed))
+    assert pipeline.prefilter(conn, cfg) == 1
+    cfg.max_age_days = 0
+    assert pipeline.prefilter(conn, cfg) == 0
+    assert len(db.articles_by_status(conn, "filtered")) == 0
 
 
 def test_parse_signals_validates():

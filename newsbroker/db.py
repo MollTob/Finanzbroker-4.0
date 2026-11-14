@@ -84,7 +84,7 @@ def insert_article(conn: sqlite3.Connection, *, source: str, source_kind: str, r
 
 def articles_by_status(conn: sqlite3.Connection, status: str, limit: int = 1000) -> list[sqlite3.Row]:
     return conn.execute(
-        "SELECT * FROM articles WHERE status = ? ORDER BY (source_kind = 'primary') DESC, id LIMIT ?",
+        "SELECT * FROM articles WHERE status = ? ORDER BY COALESCE(published_at, fetched_at) DESC, id DESC LIMIT ?",
         (status, limit),
     ).fetchall()
 
