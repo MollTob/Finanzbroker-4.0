@@ -1,0 +1,10 @@
+[Unit]
+Description=Finanzbroker 4.0 - Pipeline-Lauf
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=pi
+WorkingDirectory=/home/pi/Finanzbroker-4.0
+ExecStart=/home/pi/Finanzbroker-4.0/.venv/bin/python -m newsbroker run

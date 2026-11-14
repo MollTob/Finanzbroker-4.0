@@ -1,0 +1,59 @@
+# Quellen und Vorfilter. Feed-URLs ändern sich gelegentlich:
+# `python -m newsbroker ingest` loggt jeden Feed, der nicht erreichbar ist.
+
+# Vorfilter für Medienartikel (Kleinschreibung, Teilstring-Treffer)
+keywords = [
+    # Unternehmensereignisse
+    "ceo", "resign", "steps down", "scandal", "fraud", "probe", "investigation", "lawsuit",
+    "guidance", "profit warning", "earnings", "forecast", "merger", "acquisition", "takeover",
+    "bankrupt", "layoff", "recall", "downgrade", "upgrade",
+    # Makro
+    "interest rate", "rate cut", "rate hike", "inflation", "central bank", "fed ", "ecb",
+    "tariff", "sanction", "export control", "recession", "gdp", "jobs report", "opec", "oil price",
+    # Segmente
+    "nvidia", "semiconductor", "chip", "artificial intelligence", " ai ", "bubble", "data center",
+    # Märkte
+    "stocks", "shares", "nasdaq", "s&p", "dax", "nikkei", "hang seng", "sensex", "bovespa",
+    "emerging market", "yuan", "rupee", "stimulus",
+]
+
+[settings]
+llm_model = "claude-haiku-5-5"
+push_min_magnitude = 4       # Sofort-Push ab dieser Stärke ...
+push_min_confidence = 0.7    # ... und dieser Konfidenz
+digest_min_magnitude = 2
+max_scoring_per_run = 25     # Kostenbremse pro Lauf
+
+# --- Primärquellen (gehen ohne Keyword-Filter ins Scoring) ---
+[[feeds]]
+name = "Fed"
+url = "https://www.federalreserve.gov/feeds/press_all.xml"
+kind = "primary"
+region = "US"
+
+[[feeds]]
+name = "EZB"
+url = "https://www.ecb.europa.eu/rss/press.html"
+kind = "primary"
+region = "EU"
+
+# --- Medien ---
+[[feeds]]
+name = "BBC Business"
+url = "https://feeds.bbci.co.uk/news/business/rss.xml"
+region = "global"
+
+[[feeds]]
+name = "CNBC"
+url = "https://www.cnbc.com/id/100003114/device/rss/rss.html"
+region = "US"
+
+[[feeds]]
+name = "Guardian Business"
+url = "https://www.theguardian.com/business/rss"
+region = "global"
+
+[[feeds]]
+name = "Nikkei Asia"
+url = "https://asia.nikkei.com/rss/feed/nar"
+region = "EM"

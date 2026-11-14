@@ -1,0 +1,10 @@
+[Unit]
+Description=Finanzbroker 4.0 - alle 15 Minuten
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=15min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

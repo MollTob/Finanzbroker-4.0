@@ -1,0 +1,11 @@
+[Unit]
+Description=Finanzbroker 4.0 - Digest pro Handelsfenster (Asien, Europa, US)
+
+[Timer]
+OnCalendar=*-*-* 07:30:00 Europe/Berlin
+OnCalendar=*-*-* 13:00:00 Europe/Berlin
+OnCalendar=*-*-* 22:15:00 Europe/Berlin
+Persistent=true
+
+[Install]
+WantedBy=timers.target
