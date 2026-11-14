@@ -47,3 +47,15 @@ def send(token: str, chat_id: str, text: str, timeout: int = 20) -> None:
         timeout=timeout,
     )
     resp.raise_for_status()
+
+
+def find_chat_ids(token: str, timeout: int = 20) -> list[tuple[int, str]]:
+    """Liest aus getUpdates, wer dem Bot geschrieben hat: Liste aus (Chat-ID, Name)."""
+    resp = requests.get(f"https://api.telegram.org/bot{token}/getUpdates", timeout=timeout)
+    resp.raise_for_status()
+    chats = {}
+    for update in resp.json().get("result", []):
+        chat = (update.get("message") or {}).get("chat")
+        if chat:
+            chats[chat["id"]] = chat.get("first_name") or chat.get("title") or ""
+    return list(chats.items())

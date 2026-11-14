@@ -23,8 +23,8 @@ cp .env.example .env    # Keys eintragen
 .venv/bin/python -m newsbroker run
 ```
 
-- **Telegram:** Bot über `@BotFather` anlegen (`/newbot`), Token in `.env`. Dem Bot einmal schreiben, dann steht die
-  Chat-ID unter `https://api.telegram.org/bot<TOKEN>/getUpdates`.
+- **Telegram:** Bot über `@BotFather` anlegen (`/newbot`), Token in `.env`. Dem Bot einmal schreiben, dann zeigt
+  `python -m newsbroker chat-id` die Chat-ID an.
 - **LLM:** `ANTHROPIC_API_KEY` in `.env`. Modell und Schwellen stehen in `config/feeds.toml`.
 
 ## Befehle
@@ -35,6 +35,7 @@ cp .env.example .env    # Keys eintragen
 | `python -m newsbroker ingest` | Nur Feeds abrufen und filtern (kostet keine LLM-Tokens) |
 | `python -m newsbroker digest --title "US-Schluss"` | Digest senden |
 | `python -m newsbroker stats` | Zählerstände |
+| `python -m newsbroker chat-id` | Chat-ID anzeigen, nachdem du dem Bot geschrieben hast |
 | `python -m newsbroker test-telegram` | Testnachricht |
 
 ## Raspberry Pi
