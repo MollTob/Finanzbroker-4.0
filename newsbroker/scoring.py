@@ -4,6 +4,8 @@ from __future__ import annotations
 import json
 import logging
 import re
+from datetime import date
+from typing import Optional
 
 import requests
 
@@ -29,6 +31,17 @@ Melde das Ergebnis über das Tool report_signals. Die Felder pro Signal:
   "related": ["Zweitrundeneffekte, z. B. Zulieferer oder Konkurrenten"]
 }]}
 
+Einordnung:
+- Die Nachricht stammt aus einem aktuellen Feed. Nimm sie als gemeldete Tatsache, auch wenn sie deinem
+  Wissensstand widerspricht: Dein Wissen kann veraltet sein, das heutige Datum steht in der Anfrage.
+- "confidence" bewertet, wie sicher die erwartete Kursreaktion ist, nicht, ob die Meldung stimmt.
+- Unter "Weitere aktuelle Schlagzeilen" siehst du, was andere Quellen gerade melden. Berichten mehrere
+  Quellen dasselbe Ereignis, ist es bestätigt. Zeigen sie, dass der Markt schon reagiert hat (Kursverluste,
+  Folgeberichte seit Tagen), dann ist viel eingepreist: surprise und magnitude entsprechend senken.
+- Bewerte den Beitrag dieser einen Nachricht. Kommentare, Karikaturen und Rückblicke zu einem bekannten
+  Ereignis sind keine neuen Signale.
+- Für börsennotierte Unternehmen als target das Tickersymbol verwenden (z. B. NVDA).
+
 Regeln:
 - Keine Marktrelevanz -> leere Liste "signals".
 - magnitude: 1 = Rauschen, 3 = spürbar für den Wert, 5 = marktbewegend (CEO-Rücktritt, Skandal, Notenbank-Überraschung).
@@ -41,12 +54,18 @@ DIRECTIONS = {"long", "short", "neutral"}
 HORIZONS = {"tage", "woche"}
 
 
-def build_user_prompt(article: dict) -> str:
-    return (
-        f"Quelle: {article['source']} ({article['source_kind']}, Region {article['region']})\n"
-        f"Titel: {article['title']}\n"
-        f"Zusammenfassung: {article['summary'] or '-'}"
-    )
+def build_user_prompt(article: dict, context: Optional[list] = None, today: Optional[str] = None) -> str:
+    lines = [
+        f"Heutiges Datum: {today or date.today().isoformat()}",
+        f"Quelle: {article['source']} ({article['source_kind']}, Region {article['region']})",
+        f"Veröffentlicht: {article.get('published_at') or 'unbekannt'}",
+        f"Titel: {article['title']}",
+        f"Zusammenfassung: {article['summary'] or '-'}",
+    ]
+    if context:
+        lines.append("\nWeitere aktuelle Schlagzeilen (nur Kontext, nicht bewerten):")
+        lines.extend(f"- {headline}" for headline in context)
+    return "\n".join(lines)
 
 
 def _clamp_int(value, low: int, high: int, default: int) -> int:
@@ -137,7 +156,8 @@ def extract_signals(response: dict) -> list[dict]:
         raise ValueError(f"{exc} (stop_reason={response.get('stop_reason')})") from None
 
 
-def score_article(article: dict, api_key: str, model: str, timeout: int = 60) -> list[dict]:
+def score_article(article: dict, api_key: str, model: str, context: Optional[list] = None,
+                  timeout: int = 60) -> list[dict]:
     """Ruft das LLM auf und gibt validierte Signale zurück.
 
     Die Antwort wird über einen erzwungenen Tool-Aufruf abgeholt. Damit liefert die API
@@ -152,7 +172,7 @@ def score_article(article: dict, api_key: str, model: str, timeout: int = 60) ->
             "system": SYSTEM_PROMPT,
             "tools": [SIGNAL_TOOL],
             "tool_choice": {"type": "tool", "name": SIGNAL_TOOL["name"]},
-            "messages": [{"role": "user", "content": build_user_prompt(article)}],
+            "messages": [{"role": "user", "content": build_user_prompt(article, context)}],
         },
         timeout=timeout,
     )

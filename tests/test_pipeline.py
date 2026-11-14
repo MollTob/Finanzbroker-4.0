@@ -87,7 +87,7 @@ def test_full_run_pushes_once(conn, cfg):
     sent = []
     pipeline.ingest(conn, cfg, fetch=lambda feed, ua: parse_feed(RSS, feed))
     assert pipeline.prefilter(conn, cfg) == 1
-    created = pipeline.score(conn, cfg, scorer=lambda art, key, model: scoring.parse_signals(LLM_REPLY))
+    created = pipeline.score(conn, cfg, scorer=lambda art, key, model, ctx: scoring.parse_signals(LLM_REPLY))
     assert created == 1
     sender = lambda token, chat, text: sent.append(text)
     assert pipeline.push(conn, cfg, sender=sender) == 1
@@ -101,7 +101,7 @@ def test_scoring_failure_does_not_stop_run(conn, cfg):
     pipeline.ingest(conn, cfg, fetch=lambda feed, ua: parse_feed(RSS, feed))
     pipeline.prefilter(conn, cfg)
 
-    def boom(art, key, model):
+    def boom(art, key, model, ctx):
         raise RuntimeError("API down")
 
     assert pipeline.score(conn, cfg, scorer=boom) == 0
@@ -114,3 +114,19 @@ def test_digest_splits_long_messages():
            "related": "", "article_url": "https://example.com", "article_source": "S", "article_title": "T"}
     messages = telegram.format_digest([sig] * 20)
     assert len(messages) > 1 and all(len(m) <= telegram.MAX_LEN for m in messages)
+
+
+def test_push_once_per_target_and_direction(conn, cfg):
+    sent = []
+    two = RSS.replace("Local bakery wins award", "Nvidia CEO exit: analysts react")
+    pipeline.ingest(conn, cfg, fetch=lambda feed, ua: parse_feed(two, feed))
+    pipeline.prefilter(conn, cfg)
+    assert pipeline.score(conn, cfg, scorer=lambda a, k, m, ctx: scoring.parse_signals(LLM_REPLY)) == 2
+    assert pipeline.push(conn, cfg, sender=lambda t, c, text: sent.append(text)) == 1
+    assert len(db.signals_to_push(conn, 1, 0.0)) == 0
+
+
+def test_prompt_contains_context_and_date():
+    art = {"source": "S", "source_kind": "media", "region": "US", "title": "T", "summary": "", "published_at": None}
+    text = scoring.build_user_prompt(art, ["CNBC: Other headline"], today="2026-11-14")
+    assert "2026-11-14" in text and "- CNBC: Other headline" in text

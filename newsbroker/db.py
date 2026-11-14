@@ -4,7 +4,7 @@ from __future__ import annotations
 import hashlib
 import re
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 SCHEMA = """
@@ -137,3 +137,23 @@ def retry_failed(conn: sqlite3.Connection) -> int:
     cur = conn.execute("UPDATE articles SET status = 'filtered' WHERE status = 'failed'")
     conn.commit()
     return cur.rowcount
+
+
+def recent_headlines(conn: sqlite3.Connection, exclude_id: int, limit: int = 25) -> list[str]:
+    """Aktuelle relevante Schlagzeilen als Kontext fürs Scoring (Bestätigung durch andere Quellen)."""
+    rows = conn.execute(
+        "SELECT source, title FROM articles WHERE status != 'skipped' AND id != ?"
+        " ORDER BY COALESCE(published_at, fetched_at) DESC, id DESC LIMIT ?",
+        (exclude_id, limit),
+    ).fetchall()
+    return [f"{r['source']}: {r['title']}" for r in rows]
+
+
+def pushed_recently(conn: sqlite3.Connection, target: str, direction: str, hours: int = 24) -> bool:
+    """True, wenn zu diesem Ziel und dieser Richtung in den letzten Stunden schon ein Push rausging."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat(timespec="seconds")
+    row = conn.execute(
+        "SELECT 1 FROM signals WHERE pushed_at >= ? AND direction = ? AND lower(target) = lower(?) LIMIT 1",
+        (cutoff, direction, target),
+    ).fetchone()
+    return row is not None

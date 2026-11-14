@@ -43,7 +43,8 @@ def score(conn: sqlite3.Connection, cfg: Config, scorer=scoring.score_article) -
     created = 0
     for art in db.articles_by_status(conn, "filtered", cfg.max_scoring_per_run):
         try:
-            signals = scorer(dict(art), cfg.llm_api_key, cfg.llm_model)
+            context = db.recent_headlines(conn, art["id"])
+            signals = scorer(dict(art), cfg.llm_api_key, cfg.llm_model, context)
         except Exception as exc:  # ein kaputter Artikel darf den Lauf nicht stoppen
             log.warning("Scoring fehlgeschlagen für Artikel %s: %s", art["id"], exc)
             db.set_status(conn, art["id"], "failed")
@@ -64,10 +65,12 @@ def push(conn: sqlite3.Connection, cfg: Config, sender=telegram.send) -> int:
         return 0
     sent = 0
     for sig in db.signals_to_push(conn, cfg.push_min_magnitude, cfg.push_min_confidence):
-        sender(cfg.telegram_token, cfg.telegram_chat_id, telegram.format_signal(sig))
+        # Ein Ereignis erzeugt viele Artikel: pro Ziel und Richtung nur ein Push in 24 Stunden.
+        if not db.pushed_recently(conn, sig["target"], sig["direction"]):
+            sender(cfg.telegram_token, cfg.telegram_chat_id, telegram.format_signal(sig))
+            sent += 1
         db.mark(conn, "pushed_at", [sig["id"]])
         conn.commit()
-        sent += 1
     log.info("Push: %d Nachrichten", sent)
     return sent
 
