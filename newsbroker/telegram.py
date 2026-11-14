@@ -9,6 +9,30 @@ ARROW = {"long": "🟢 LONG", "short": "🔴 SHORT", "neutral": "⚪ NEUTRAL"}
 MAX_LEN = 4000  # Telegram-Limit liegt bei 4096 Zeichen
 
 
+class TelegramError(RuntimeError):
+    """Fehler der Telegram-API. Die Meldung enthält bewusst keine URL, weil darin das Token steht."""
+
+
+def _call(method: str, token: str, timeout: int, **kwargs) -> dict:
+    if not token:
+        raise TelegramError("TELEGRAM_BOT_TOKEN fehlt in der .env")
+    try:
+        resp = requests.request(
+            "POST" if "json" in kwargs else "GET",
+            f"https://api.telegram.org/bot{token}/{method}", timeout=timeout, **kwargs)
+    except requests.RequestException as exc:
+        raise TelegramError(f"Telegram nicht erreichbar ({type(exc).__name__})") from None
+    if resp.status_code == 401:
+        raise TelegramError("Telegram lehnt das Token ab (401). TELEGRAM_BOT_TOKEN in der .env prüfen.")
+    try:
+        data = resp.json()
+    except ValueError:
+        data = {}
+    if not resp.ok or not data.get("ok", False):
+        raise TelegramError(f"Telegram-Fehler {resp.status_code}: {data.get('description', 'unbekannt')}")
+    return data
+
+
 def format_signal(sig) -> str:
     esc = html.escape
     lines = [
@@ -41,20 +65,16 @@ def format_digest(signals, title: str = "Digest") -> list[str]:
 
 
 def send(token: str, chat_id: str, text: str, timeout: int = 20) -> None:
-    resp = requests.post(
-        f"https://api.telegram.org/bot{token}/sendMessage",
-        json={"chat_id": chat_id, "text": text, "parse_mode": "HTML", "disable_web_page_preview": True},
-        timeout=timeout,
-    )
-    resp.raise_for_status()
+    if not chat_id:
+        raise TelegramError("TELEGRAM_CHAT_ID fehlt in der .env")
+    _call("sendMessage", token, timeout,
+          json={"chat_id": chat_id, "text": text, "parse_mode": "HTML", "disable_web_page_preview": True})
 
 
 def find_chat_ids(token: str, timeout: int = 20) -> list[tuple[int, str]]:
     """Liest aus getUpdates, wer dem Bot geschrieben hat: Liste aus (Chat-ID, Name)."""
-    resp = requests.get(f"https://api.telegram.org/bot{token}/getUpdates", timeout=timeout)
-    resp.raise_for_status()
     chats = {}
-    for update in resp.json().get("result", []):
+    for update in _call("getUpdates", token, timeout).get("result", []):
         chat = (update.get("message") or {}).get("chat")
         if chat:
             chats[chat["id"]] = chat.get("first_name") or chat.get("title") or ""

@@ -41,4 +41,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except telegram.TelegramError as exc:
+        raise SystemExit(f"Fehler: {exc}")
