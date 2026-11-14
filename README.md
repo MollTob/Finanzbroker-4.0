@@ -35,6 +35,7 @@ cp .env.example .env    # Keys eintragen
 | `python -m newsbroker ingest` | Nur Feeds abrufen und filtern (kostet keine LLM-Tokens) |
 | `python -m newsbroker digest --title "US-Schluss"` | Digest senden |
 | `python -m newsbroker stats` | Zählerstände |
+| `python -m newsbroker retry-failed` | Fehlgeschlagene Artikel für den nächsten Lauf freigeben |
 | `python -m newsbroker chat-id` | Chat-ID anzeigen, nachdem du dem Bot geschrieben hast |
 | `python -m newsbroker test-telegram` | Testnachricht |
 

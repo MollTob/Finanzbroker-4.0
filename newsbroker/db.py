@@ -130,3 +130,10 @@ def signals_for_digest(conn: sqlite3.Connection, min_magnitude: int) -> list[sql
 def mark(conn: sqlite3.Connection, column: str, signal_ids: list[int]) -> None:
     assert column in ("pushed_at", "digested_at")
     conn.executemany(f"UPDATE signals SET {column} = ? WHERE id = ?", [(now_iso(), i) for i in signal_ids])
+
+
+def retry_failed(conn: sqlite3.Connection) -> int:
+    """Setzt fehlgeschlagene Artikel zurück, damit der nächste Lauf sie erneut bewertet."""
+    cur = conn.execute("UPDATE articles SET status = 'filtered' WHERE status = 'failed'")
+    conn.commit()
+    return cur.rowcount

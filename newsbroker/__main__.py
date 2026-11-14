@@ -1,4 +1,4 @@
-"""CLI: python -m newsbroker <run|ingest|digest|stats|test-telegram|chat-id>"""
+"""CLI: python -m newsbroker <run|ingest|digest|stats|test-telegram|chat-id|retry-failed>"""
 from __future__ import annotations
 
 import argparse
@@ -10,7 +10,7 @@ from .config import load_config
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="newsbroker")
-    parser.add_argument("command", choices=["run", "ingest", "digest", "stats", "test-telegram", "chat-id"])
+    parser.add_argument("command", choices=["run", "ingest", "digest", "stats", "test-telegram", "chat-id", "retry-failed"])
     parser.add_argument("--title", default="Digest", help="Überschrift für den Digest")
     args = parser.parse_args()
 
@@ -32,6 +32,8 @@ def main() -> None:
     elif args.command == "test-telegram":
         telegram.send(cfg.telegram_token, cfg.telegram_chat_id, "Finanzbroker 4.0: Verbindung steht.")
         print("Testnachricht gesendet.")
+    elif args.command == "retry-failed":
+        print(f"{db.retry_failed(conn)} Artikel werden beim nächsten Lauf erneut bewertet.")
     elif args.command == "chat-id":
         chats = telegram.find_chat_ids(cfg.telegram_token)
         if not chats:
