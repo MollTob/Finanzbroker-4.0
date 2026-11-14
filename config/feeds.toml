@@ -27,7 +27,7 @@ primary_keywords = [
 [settings]
 llm_model = "claude-haiku-5-5"
 push_min_magnitude = 4       # Sofort-Push ab dieser Stärke ...
-push_min_confidence = 0.7    # ... und dieser Konfidenz
+push_min_confidence = 0.5    # ... und dieser Konfidenz (das Modell vergibt selten mehr als 0.6)
 digest_min_magnitude = 2
 max_scoring_per_run = 25     # Kostenbremse pro Lauf
 max_age_days = 3             # ältere Artikel werden nicht bewertet
