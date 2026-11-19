@@ -12,6 +12,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(prog="newsbroker")
     parser.add_argument("command", choices=["run", "ingest", "digest", "stats", "test-telegram", "chat-id", "retry-failed"])
     parser.add_argument("--title", default="Digest", help="Überschrift für den Digest")
+    parser.add_argument("--text", default="Finanzbroker 4.0: Verbindung steht.", help="Text für test-telegram")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -30,7 +31,7 @@ def main() -> None:
             print(f"Artikel {row['status']}: {row['n']}")
         print("Signale:", conn.execute("SELECT COUNT(*) FROM signals").fetchone()[0])
     elif args.command == "test-telegram":
-        telegram.send(cfg.telegram_token, cfg.telegram_chat_id, "Finanzbroker 4.0: Verbindung steht.")
+        telegram.send(cfg.telegram_token, cfg.telegram_chat_id, args.text)
         print("Testnachricht gesendet.")
     elif args.command == "retry-failed":
         print(f"{db.retry_failed(conn)} Artikel werden beim nächsten Lauf erneut bewertet.")

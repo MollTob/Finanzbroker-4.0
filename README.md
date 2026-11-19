@@ -41,6 +41,21 @@ cp .env.example .env    # Keys eintragen
 
 ## Raspberry Pi
 
+**Neue SD-Karte (empfohlen):**
+
+1. Mit dem Raspberry Pi Imager *Raspberry Pi OS Lite (64-bit)* schreiben, in der Anpassung Benutzer,
+   Hostname, SSH und ggf. WLAN setzen.
+2. Karte neu einstecken, dann `pip install pyyaml && python3 deploy/prepare_sdcard.py /Volumes/bootfs`.
+   Das legt Projekt, `.env` und das Setup auf die Boot-Partition und ergänzt `user-data`.
+3. Karte in den Pi, Netz anschließen, einschalten. Beim ersten Start richtet
+   `finanzbroker-setup.service` alles ein (Pakete, venv, Timer) und wiederholt sich jede Minute,
+   bis es klappt. Am Ende kommt eine Telegram-Nachricht. Projekt und `.env` werden danach von der
+   Boot-Partition gelöscht.
+
+Log der Einrichtung: `journalctl -u finanzbroker-setup`. Log der Läufe: `journalctl -u newsbroker`.
+
+**Manuell auf einem bestehenden System:**
+
 ```bash
 sudo cp deploy/*.service deploy/*.timer /etc/systemd/system/
 sudo systemctl daemon-reload

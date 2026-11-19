@@ -1,0 +1,16 @@
+[Unit]
+Description=Finanzbroker 4.0 - Ersteinrichtung auf dem Raspberry Pi
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=!/var/lib/finanzbroker-setup.done
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/finanzbroker-setup.sh
+# Ohne Netz oder bei falscher Uhrzeit (der Pi hat keine Echtzeituhr) scheitert der erste Versuch.
+Restart=on-failure
+RestartSec=60
+
+[Install]
+WantedBy=multi-user.target
