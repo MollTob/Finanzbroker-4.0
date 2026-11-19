@@ -67,20 +67,22 @@ def _filter(info: tarfile.TarInfo):
     return None if any(p in EXCLUDE for p in parts) else info
 
 
-def patch_user_data(path: Path) -> bool:
+def add_runcmd(data: dict) -> bool:
     """Hängt die runcmd-Schritte an. Gibt False zurück, wenn sie schon drin sind."""
-    text = path.read_text(encoding="utf-8")
-    data = yaml.safe_load(text) or {}
     runcmd = data.setdefault("runcmd", [])
     if any(MARKER in str(cmd) for cmd in runcmd):
         return False
     runcmd.extend(RUNCMD)
-    body = yaml.safe_dump(data, sort_keys=False, allow_unicode=True, default_flow_style=False)
-    path.write_text("#cloud-config\n" + body, encoding="utf-8")
     return True
 
 
+def dump(data: dict) -> str:
+    return "#cloud-config\n" + yaml.safe_dump(data, sort_keys=False, allow_unicode=True, default_flow_style=False)
+
+
 def main(bootfs: Path, ssh_key: Optional[Path] = None) -> None:
+    # Jede Datei wird genau einmal geschrieben und danach nicht wieder gelesen: Auf manchen
+    # gemounteten FAT-Partitionen ist eine eben geschriebene Datei kurz nicht sichtbar.
     user_data = bootfs / "user-data"
     if not (bootfs / "cmdline.txt").exists():
         sys.exit(f"{bootfs} sieht nicht wie eine Raspberry-Pi-Boot-Partition aus (cmdline.txt fehlt).")
@@ -88,9 +90,10 @@ def main(bootfs: Path, ssh_key: Optional[Path] = None) -> None:
         key = ssh_key.expanduser().read_text(encoding="utf-8").strip()
         if not key.startswith("ssh-") or "PRIVATE KEY" in key:
             sys.exit(f"{ssh_key} ist kein öffentlicher SSH-Schlüssel")
-        body = yaml.safe_dump(base_user_data(key), sort_keys=False, allow_unicode=True)
-        user_data.write_text("#cloud-config\n" + body, encoding="utf-8")
-    elif not user_data.exists():
+        data = base_user_data(key)
+    elif user_data.exists():
+        data = yaml.safe_load(user_data.read_text(encoding="utf-8")) or {}
+    else:
         sys.exit("user-data fehlt: Karte im Imager anpassen oder --ssh-key angeben.")
     if not (ROOT / ".env").exists():
         sys.exit(".env fehlt im Projektordner")
@@ -101,11 +104,12 @@ def main(bootfs: Path, ssh_key: Optional[Path] = None) -> None:
     shutil.copyfile(ROOT / ".env", bootfs / "finanzbroker.env")
     shutil.copyfile(ROOT / "deploy" / "pi-setup.sh", bootfs / "finanzbroker-setup.sh")
     shutil.copyfile(ROOT / "deploy" / "finanzbroker-setup.service", bootfs / "finanzbroker-setup.service")
-    changed = patch_user_data(user_data)
+    changed = add_runcmd(data)
+    if changed or ssh_key is not None:
+        user_data.write_text(dump(data), encoding="utf-8")
 
-    size = (bootfs / "finanzbroker.tar.gz").stat().st_size / 1e6
-    print(f"Projekt kopiert ({size:.1f} MB), .env kopiert, user-data {'ergänzt' if changed else 'war schon ergänzt'}.")
-    print("Runcmd-Einträge:", len(yaml.safe_load(user_data.read_text(encoding='utf-8')).get("runcmd", [])))
+    print(f"Projekt und .env kopiert, user-data {'geschrieben' if changed or ssh_key else 'war schon ergänzt'} "
+          f"({len(data['runcmd'])} runcmd-Schritte).")
 
 
 if __name__ == "__main__":
