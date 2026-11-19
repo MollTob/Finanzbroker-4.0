@@ -115,3 +115,28 @@ def test_pi_setup_fails_cleanly_without_bundle(tmp_path):
     result = subprocess.run(["bash", str(REPO / "deploy" / "pi-setup.sh")], env=env, capture_output=True, text=True)
     assert result.returncode == 1 and "fehlt" in result.stderr
     assert not (tmp_path / "done").exists()
+
+
+def test_prepare_with_ssh_key_writes_user(card, tmp_path):
+    project, bootfs = card
+    (bootfs / "user-data").write_text("#cloud-config\n# Standard aus dem Image\n")
+    pub = tmp_path / "id.pub"
+    pub.write_text("ssh-ed25519 AAAATEST finanzbroker-pi\n")
+    subprocess.run([sys.executable, str(project / "deploy" / "prepare_sdcard.py"), str(bootfs), "--ssh-key", str(pub)],
+                   check=True, capture_output=True)
+    data = yaml.safe_load((bootfs / "user-data").read_text())
+    user = data["users"][0]
+    assert user["name"] == "pi" and user["lock_passwd"] is True and "passwd" not in user
+    assert user["ssh_authorized_keys"] == ["ssh-ed25519 AAAATEST finanzbroker-pi"]
+    assert data["ssh_pwauth"] is False and data["hostname"] == "finanzbroker"
+    assert data["runcmd"][0] == ["systemctl", "enable", "--now", "ssh"] and len(data["runcmd"]) == 5
+    assert 'Check-Date "false"' in data["apt"]["conf"]
+
+
+def test_prepare_rejects_private_key(card, tmp_path):
+    project, bootfs = card
+    key = tmp_path / "id"
+    key.write_text("-----BEGIN OPENSSH PRIVATE KEY-----\nxx\n")
+    result = subprocess.run([sys.executable, str(project / "deploy" / "prepare_sdcard.py"), str(bootfs),
+                             "--ssh-key", str(key)], capture_output=True, text=True)
+    assert result.returncode != 0 and not (bootfs / "finanzbroker.env").exists()

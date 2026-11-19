@@ -2,6 +2,11 @@
 beschriebenen SD-Karte (Raspberry Pi OS ab Trixie, cloud-init).
 
     python3 deploy/prepare_sdcard.py /Volumes/bootfs
+    python3 deploy/prepare_sdcard.py /Volumes/bootfs --ssh-key ~/.ssh/id_ed25519.pub
+
+Ohne --ssh-key muss die Karte im Imager angepasst worden sein (Benutzer, SSH). Mit --ssh-key wird
+user-data neu geschrieben: Benutzer pi ohne Passwort, Anmeldung nur per Schlüssel, Hostname
+finanzbroker, Zeitzone Europe/Berlin. Dann darf die Imager-Anpassung übersprungen werden.
 
 Kopiert:
   finanzbroker.tar.gz         Projekt ohne .venv und Caches (inkl. data/ und .git)
@@ -13,10 +18,12 @@ Der Inhalt von user-data (Passwort-Hash, WLAN) wird dabei nicht ausgegeben.
 """
 from __future__ import annotations
 
+import argparse
 import shutil
 import sys
 import tarfile
 from pathlib import Path
+from typing import Optional
 
 import yaml
 
@@ -29,6 +36,30 @@ RUNCMD = [
     ["systemctl", "daemon-reload"],
     ["systemctl", "enable", "--now", "--no-block", "finanzbroker-setup.service"],
 ]
+
+
+def base_user_data(public_key: str, user: str = "pi", hostname: str = "finanzbroker") -> dict:
+    """Entspricht dem, was der Imager bei angepasster Karte schreibt, nur ohne Passwort."""
+    return {
+        "hostname": hostname,
+        "manage_etc_hosts": True,
+        "packages": ["avahi-daemon"],
+        # Der Pi hat keine Echtzeituhr: apt soll beim ersten Start nicht am Datum scheitern.
+        "apt": {"conf": 'Acquire {\n  Check-Date "false";\n};\n'},
+        "timezone": "Europe/Berlin",
+        "keyboard": {"model": "pc105", "layout": "de"},
+        "enable_ssh": True,
+        "ssh_pwauth": False,
+        "users": [{
+            "name": user,
+            "groups": "users,adm,dialout,audio,netdev,video,plugdev,cdrom,games,input,gpio,spi,i2c,render,sudo",
+            "shell": "/bin/bash",
+            "lock_passwd": True,
+            "ssh_authorized_keys": [public_key],
+            "sudo": "ALL=(ALL) NOPASSWD:ALL",
+        }],
+        "runcmd": [["systemctl", "enable", "--now", "ssh"]],
+    }
 
 
 def _filter(info: tarfile.TarInfo):
@@ -49,11 +80,18 @@ def patch_user_data(path: Path) -> bool:
     return True
 
 
-def main(bootfs: Path) -> None:
+def main(bootfs: Path, ssh_key: Optional[Path] = None) -> None:
     user_data = bootfs / "user-data"
-    if not (bootfs / "cmdline.txt").exists() or not user_data.exists():
-        sys.exit(f"{bootfs} sieht nicht wie eine mit dem Imager angepasste Boot-Partition aus "
-                 "(cmdline.txt oder user-data fehlt).")
+    if not (bootfs / "cmdline.txt").exists():
+        sys.exit(f"{bootfs} sieht nicht wie eine Raspberry-Pi-Boot-Partition aus (cmdline.txt fehlt).")
+    if ssh_key is not None:
+        key = ssh_key.expanduser().read_text(encoding="utf-8").strip()
+        if not key.startswith("ssh-") or "PRIVATE KEY" in key:
+            sys.exit(f"{ssh_key} ist kein öffentlicher SSH-Schlüssel")
+        body = yaml.safe_dump(base_user_data(key), sort_keys=False, allow_unicode=True)
+        user_data.write_text("#cloud-config\n" + body, encoding="utf-8")
+    elif not user_data.exists():
+        sys.exit("user-data fehlt: Karte im Imager anpassen oder --ssh-key angeben.")
     if not (ROOT / ".env").exists():
         sys.exit(".env fehlt im Projektordner")
 
@@ -71,6 +109,8 @@ def main(bootfs: Path) -> None:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        sys.exit(__doc__)
-    main(Path(sys.argv[1]))
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("bootfs", type=Path)
+    parser.add_argument("--ssh-key", type=Path, help="öffentlicher Schlüssel (.pub) für Benutzer pi")
+    args = parser.parse_args()
+    main(args.bootfs, args.ssh_key)
